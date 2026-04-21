@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive 2D Engineering Drawing</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Browser CAD Studio</p>
+          <h1>Interactive 2D Engineering Drawing</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="undo-btn" type="button">Undo</button>
+          <button id="redo-btn" type="button">Redo</button>
+          <button id="save-btn" type="button">Save JSON</button>
+          <button id="load-btn" type="button">Load JSON</button>
+          <button id="export-svg-btn" type="button">SVG</button>
+          <button id="export-png-btn" type="button">PNG</button>
+          <button id="export-pdf-btn" type="button">PDF</button>
+        </div>
+      </header>
+
+      <div class="workspace-layout">
+        <aside class="toolbar">
+          <div class="panel-heading">
+            <p class="eyebrow">Tools</p>
+            <h2>Sketch Kit</h2>
+          </div>
+          <div class="tool-grid">
+            <button class="tool-btn is-active" data-tool="select" type="button">Select</button>
+            <button class="tool-btn" data-tool="line" type="button">Line</button>
+            <button class="tool-btn" data-tool="dashedLine" type="button">Dashed</button>
+            <button class="tool-btn" data-tool="centerLine" type="button">Center</button>
+            <button class="tool-btn" data-tool="point" type="button">Point</button>
+            <button class="tool-btn" data-tool="circle" type="button">Circle</button>
+            <button class="tool-btn" data-tool="ellipse" type="button">Ellipse</button>
+            <button class="tool-btn" data-tool="rectangle" type="button">Rectangle</button>
+            <button class="tool-btn" data-tool="square" type="button">Square</button>
+            <button class="tool-btn" data-tool="rhombus" type="button">Rhombus</button>
+            <button class="tool-btn" data-tool="polygon" type="button">Polygon</button>
+            <button class="tool-btn" data-tool="parabola" type="button">Parabola</button>
+            <button class="tool-btn" data-tool="freeform" type="button">Freeform</button>
+            <button class="tool-btn" data-tool="arc" type="button">Compass Arc</button>
+          </div>
+
+          <div class="toolbar-notes">
+            <p><strong>Shortcuts:</strong> `V` select, `L` line, `C` circle, `R` rectangle, `A` arc, `Delete`, `Ctrl/Cmd+Z`.</p>
+            <p><strong>Pan:</strong> mouse wheel to zoom, middle mouse or hold space to pan.</p>
+          </div>
+        </aside>
+
+        <main class="workspace">
+          <div class="workspace-header">
+            <div>
+              <p class="eyebrow">Canvas</p>
+              <h2>Precision View</h2>
+            </div>
+            <div class="workspace-badges">
+              <span id="tool-badge">Tool: Select</span>
+              <span id="units-badge">Units: mm</span>
+              <span id="snap-badge">Snap: grid + points + angles</span>
+            </div>
+          </div>
+
+          <div class="drawing-stage">
+            <svg id="drawing-surface" aria-label="Engineering drawing canvas">
+              <defs>
+                <pattern id="minor-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(42, 76, 97, 0.16)" stroke-width="0.4" />
+                </pattern>
+                <pattern id="major-grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                  <rect width="50" height="50" fill="url(#minor-grid)"></rect>
+                  <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(20, 42, 56, 0.28)" stroke-width="0.8" />
+                </pattern>
+              </defs>
+              <g id="viewport">
+                <rect id="grid-plane" x="-50000" y="-50000" width="100000" height="100000" fill="url(#major-grid)"></rect>
+                <g id="geometry-layer"></g>
+                <g id="annotation-layer"></g>
+                <g id="draft-layer"></g>
+                <g id="selection-layer"></g>
+              </g>
+            </svg>
+          </div>
+
+          <footer class="statusbar">
+            <span id="cursor-readout">Cursor: 0.00, 0.00</span>
+            <span id="selection-readout">Selection: none</span>
+            <span id="hint-readout">Hint: Click a tool and start drawing.</span>
+          </footer>
+        </main>
+
+        <aside class="inspector">
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Project</p>
+              <h2>Scene Setup</h2>
+            </div>
+            <label class="field">
+              <span>Units</span>
+              <select id="units-select">
+                <option value="mm">Millimeters</option>
+                <option value="cm">Centimeters</option>
+                <option value="in">Inches</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Grid size (mm)</span>
+              <input id="grid-size-input" type="number" min="1" step="1" value="10" />
+            </label>
+            <div class="toggle-stack">
+              <label><input id="show-grid-toggle" type="checkbox" checked /> Show grid</label>
+              <label><input id="show-dimensions-toggle" type="checkbox" checked /> Show dimensions</label>
+              <label><input id="snap-grid-toggle" type="checkbox" checked /> Snap to grid</label>
+              <label><input id="snap-points-toggle" type="checkbox" checked /> Snap to endpoints / midpoints</label>
+              <label><input id="snap-angle-toggle" type="checkbox" checked /> Snap to common angles</label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Tool</p>
+              <h2>Live Drawing</h2>
+            </div>
+            <div id="tool-settings-panel" class="panel-body"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Object</p>
+              <h2>Selection Properties</h2>
+            </div>
+            <div id="selection-panel" class="panel-body"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Constraints</p>
+              <h2>Line Relations</h2>
+            </div>
+            <div id="constraints-panel" class="panel-body"></div>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <input id="project-file-input" type="file" accept=".json,application/json" hidden />
+
+    <script src="./app.js"></script>
+  </body>
+</html>
