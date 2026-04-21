@@ -85,6 +85,25 @@
                 <g id="selection-layer"></g>
               </g>
             </svg>
+            <div id="line-quick-input" class="line-quick-input" aria-live="polite" hidden>
+              <div class="line-quick-grid">
+                <label class="line-quick-field" for="line-quick-input-value">
+                  <span>Length</span>
+                  <div class="line-quick-input-row">
+                    <input id="line-quick-input-value" type="text" inputmode="decimal" autocomplete="off" />
+                    <span id="line-quick-input-unit">mm</span>
+                  </div>
+                </label>
+                <label class="line-quick-field" for="line-quick-input-angle">
+                  <span>Angle</span>
+                  <div class="line-quick-input-row">
+                    <input id="line-quick-input-angle" type="text" inputmode="decimal" autocomplete="off" />
+                    <span>deg</span>
+                  </div>
+                </label>
+              </div>
+              <p>Enter to place</p>
+            </div>
           </div>
 
           <footer class="statusbar">

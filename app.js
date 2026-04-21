@@ -92,6 +92,10 @@ const elements = {
   annotationLayer: document.getElementById("annotation-layer"),
   draftLayer: document.getElementById("draft-layer"),
   selectionLayer: document.getElementById("selection-layer"),
+  lineQuickInput: document.getElementById("line-quick-input"),
+  lineQuickInputValue: document.getElementById("line-quick-input-value"),
+  lineQuickInputAngle: document.getElementById("line-quick-input-angle"),
+  lineQuickInputUnit: document.getElementById("line-quick-input-unit"),
   toolButtons: Array.from(document.querySelectorAll(".tool-btn")),
   toolBadge: document.getElementById("tool-badge"),
   unitsBadge: document.getElementById("units-badge"),
@@ -145,7 +149,8 @@ const state = {
   ui: {
     toolSettingsKey: "",
     selectionKey: "",
-    constraintsKey: ""
+    constraintsKey: "",
+    quickLineInputVisible: false
   }
 };
 
@@ -218,6 +223,12 @@ function bindEvents() {
   elements.selectionPanel.addEventListener("change", handleSelectionPanelInput);
   elements.selectionPanel.addEventListener("click", handleSelectionPanelClick);
   elements.constraintsPanel.addEventListener("click", handleConstraintPanelClick);
+  elements.lineQuickInputValue.addEventListener("input", handleLineQuickInputChange);
+  elements.lineQuickInputAngle.addEventListener("input", handleLineQuickInputChange);
+  elements.lineQuickInputValue.addEventListener("keydown", handleLineQuickInputKeyDown);
+  elements.lineQuickInputAngle.addEventListener("keydown", handleLineQuickInputKeyDown);
+  elements.lineQuickInputValue.addEventListener("blur", handleLineQuickInputBlur);
+  elements.lineQuickInputAngle.addEventListener("blur", handleLineQuickInputBlur);
 
   elements.surface.addEventListener("pointerdown", handlePointerDown);
   elements.surface.addEventListener("pointermove", handlePointerMove);
@@ -270,6 +281,7 @@ function render(forcePanels = false) {
   renderSelectionPanel(forcePanels);
   renderConstraintsPanel(forcePanels);
   updateHud();
+  syncLineQuickInput();
 }
 
 function syncViewport() {
@@ -953,6 +965,147 @@ function handleToolPanelInput(event) {
     };
     render(false);
   }
+}
+
+function handleLineQuickInputChange() {
+  const lengthInput = elements.lineQuickInputValue;
+  const angleInput = elements.lineQuickInputAngle;
+  if (!(lengthInput instanceof HTMLInputElement) || !(angleInput instanceof HTMLInputElement)) {
+    return;
+  }
+
+  applyQuickLineFields(lengthInput, angleInput);
+}
+
+function handleLineQuickInputKeyDown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    event.stopPropagation();
+    const success = applyQuickLineLengthFromInput();
+    if (success) {
+      commitDraft();
+    }
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    elements.lineQuickInputValue.blur();
+    return;
+  }
+}
+
+function handleLineQuickInputBlur(event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+  input.classList.remove("is-invalid");
+}
+
+function syncLineQuickInput() {
+  const popup = elements.lineQuickInput;
+  const input = elements.lineQuickInputValue;
+  const angleInput = elements.lineQuickInputAngle;
+  const unit = elements.lineQuickInputUnit;
+  const draft = state.draft;
+  const active = Boolean(draft && LINE_TOOL_SET.has(draft.tool));
+
+  if (!active) {
+    popup.hidden = true;
+    state.ui.quickLineInputVisible = false;
+    return;
+  }
+
+  popup.hidden = false;
+  if (unit) {
+    unit.textContent = state.units;
+  }
+
+  const length = distance(draft.anchor, draft.current);
+  const angle = normalizeAngle(angleBetween(draft.anchor, draft.current));
+  if (input instanceof HTMLInputElement && document.activeElement !== input) {
+    input.value = displayFromWorld(length).toFixed(2);
+    input.classList.remove("is-invalid");
+  }
+  if (angleInput instanceof HTMLInputElement && document.activeElement !== angleInput) {
+    angleInput.value = angle.toFixed(2);
+    angleInput.classList.remove("is-invalid");
+  }
+
+  const currentClient = worldToClient(draft.current);
+  const maxX = elements.surface.clientWidth - 16;
+  const minX = 16;
+  const maxY = elements.surface.clientHeight - 16;
+  const minY = 16;
+  const x = clamp(currentClient.x + 22, minX, maxX);
+  const y = clamp(currentClient.y - 10, minY, maxY);
+  popup.style.left = `${x}px`;
+  popup.style.top = `${y}px`;
+
+  if (!state.ui.quickLineInputVisible && input instanceof HTMLInputElement) {
+    input.focus({ preventScroll: true });
+    input.select();
+  }
+
+  state.ui.quickLineInputVisible = true;
+}
+
+function applyQuickLineLengthFromInput() {
+  const lengthInput = elements.lineQuickInputValue;
+  const angleInput = elements.lineQuickInputAngle;
+  if (!(lengthInput instanceof HTMLInputElement) || !(angleInput instanceof HTMLInputElement)) {
+    return false;
+  }
+
+  return applyQuickLineFields(lengthInput, angleInput);
+}
+
+function applyDraftLineLength(lengthWorld) {
+  const draft = state.draft;
+  if (!draft || !LINE_TOOL_SET.has(draft.tool)) {
+    return;
+  }
+
+  const defaultAngle = state.axisLock === "vertical" ? 90 : 0;
+  const currentAngle = distance(draft.anchor, draft.current) < 0.001
+    ? defaultAngle
+    : angleBetween(draft.anchor, draft.current);
+  draft.current = polarPoint(draft.anchor, lengthWorld, currentAngle);
+  draft.current = enforceAxisLock(draft.anchor, draft.current);
+}
+
+function applyQuickLineFields(lengthInput, angleInput) {
+  const lengthValue = parseLengthInputToWorld(lengthInput.value);
+  const angleValue = parseAngleInput(angleInput.value);
+
+  if (lengthValue == null || lengthValue <= 0.001) {
+    lengthInput.classList.add("is-invalid");
+    return false;
+  }
+
+  if (angleValue == null) {
+    angleInput.classList.add("is-invalid");
+    return false;
+  }
+
+  lengthInput.classList.remove("is-invalid");
+  angleInput.classList.remove("is-invalid");
+  applyDraftLineGeometry(lengthValue, angleValue);
+  render(false);
+
+  return true;
+}
+
+function applyDraftLineGeometry(lengthWorld, angleDeg) {
+  const draft = state.draft;
+  if (!draft || !LINE_TOOL_SET.has(draft.tool)) {
+    return;
+  }
+
+  draft.current = polarPoint(draft.anchor, lengthWorld, normalizeAngle(angleDeg));
+  draft.current = enforceAxisLock(draft.anchor, draft.current);
 }
 
 function handleSelectionPanelClick(event) {
@@ -2156,6 +2309,13 @@ function clientToWorld(clientX, clientY) {
   };
 }
 
+function worldToClient(point) {
+  return {
+    x: point.x * state.zoom + state.offset.x,
+    y: point.y * state.zoom + state.offset.y
+  };
+}
+
 function applyShapeProperty(shape, prop, value) {
   if (shape.type === "line") {
     if (prop === "length") {
@@ -2925,6 +3085,50 @@ function getInputNumber(id, fallback) {
   }
   const value = Number(input.value);
   return Number.isNaN(value) ? fallback : value;
+}
+
+function parseLengthInputToWorld(rawValue) {
+  const text = String(rawValue || "").trim().toLowerCase();
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(/^([-+]?\d*\.?\d+)\s*(mm|cm|in)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  const unit = match[2] || state.units;
+  const factor = UNIT_FACTORS[unit];
+  if (!factor) {
+    return null;
+  }
+
+  return numeric * factor;
+}
+
+function parseAngleInput(rawValue) {
+  const text = String(rawValue || "").trim().toLowerCase();
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(/^([-+]?\d*\.?\d+)\s*(deg|°)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return normalizeAngle(numeric);
 }
 
 function currentDraftRadius(draft) {
